@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Odtwarzacz</title>
+<meta name="description" content="Odtwarzacz zestawu filmów.">
+<meta name="theme-color" content="#1d1410">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='%237a1f2b' stroke='%23c8962e' stroke-width='6'/%3E%3Cpolygon points='40,30 40,70 72,50' fill='%23f3d27a'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Cormorant+Garamond:ital,wght@0,500;0,700;1,500;1,700&family=Great+Vibes&family=Playfair+Display+SC:wght@700;900&display=swap&subset=latin-ext" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7e08a"/><stop offset=".45" stop-color="#c8962e"/><stop offset=".7" stop-color="#f3d27a"/><stop offset="1" stop-color="#8a6116"/></linearGradient>
+<symbol id="corner" viewBox="0 0 120 120"><g fill="none" stroke="url(#gold)" stroke-linecap="round">
+<path stroke-width="4" d="M4 116 C4 50 30 10 116 4"/>
+<path stroke-width="2" d="M14 116 C16 62 44 22 116 14"/>
+<path stroke-width="2.5" d="M30 92 C14 78 22 52 44 56 C60 60 56 80 42 78 C34 76 36 66 44 67"/>
+<path stroke-width="2.5" d="M92 30 C78 14 52 22 56 44 C60 60 80 56 78 42 C76 34 66 36 67 44"/>
+<path stroke-width="2" d="M44 56 C56 40 70 36 84 34"/>
+</g><g fill="url(#gold)"><circle cx="18" cy="18" r="9"/><circle cx="18" cy="18" r="4" fill="#7a1f2b"/><path d="M40 30 q10 -12 20 0 q-10 12 -20 0z"/><path d="M30 40 q-12 10 0 20 q12 -10 0 -20z"/></g></symbol>
+<symbol id="halo" viewBox="0 0 400 400"><g fill="none" stroke="url(#gold)"><circle cx="200" cy="200" r="196" stroke-width="4"/><circle cx="200" cy="200" r="184" stroke-width="1.5"/>
+<circle cx="200" cy="200" r="170" stroke-width="14" stroke-dasharray="3 9"/><circle cx="200" cy="200" r="150" stroke-width="2"/><circle cx="200" cy="200" r="138" stroke-width="6" stroke-dasharray="20 6 4 6"/></g></symbol>
+<symbol id="rule" viewBox="0 0 400 30"><g fill="none" stroke="url(#gold)" stroke-width="2.5" stroke-linecap="round"><path d="M10 15 H150 C165 15 170 4 185 6 C195 8 196 22 200 22 C204 22 205 8 215 6 C230 4 235 15 250 15 H390"/><path d="M160 22 C175 26 185 26 200 15 C215 26 225 26 240 22"/></g><circle cx="200" cy="10" r="4" fill="url(#gold)"/><circle cx="10" cy="15" r="3" fill="url(#gold)"/><circle cx="390" cy="15" r="3" fill="url(#gold)"/></symbol>
+</defs></svg>
+<div class="frame">
+<svg class="cn tl"><use href="#corner"/></svg><svg class="cn tr"><use href="#corner"/></svg><svg class="cn bl"><use href="#corner"/></svg><svg class="cn br"><use href="#corner"/></svg>
+<header class="hero small">
+  <div class="halo"><svg><use href="#halo"/></svg></div>
+  <p class="kick">Kinematograf</p>
+  <h1 class="gold">Odtwarzacz</h1>
+  <p id="dedication" class="script"></p>
+  <svg class="rule"><use href="#rule"/></svg>
+</header>
+
+<section class="screen">
+  <figure class="player">
+    <div id="stage"></div>
+    <figcaption id="now-playing"></figcaption>
+  </figure>
+  <div class="transport">
+    <button type="button" class="btn" id="btn-prev" disabled>Poprzedni</button>
+    <button type="button" class="btn" id="btn-next" disabled>Następny</button>
+    <button type="button" class="btn ghost" id="btn-full" disabled>Pełny ekran</button>
+    <label class="chk"><input type="checkbox" id="chk-autonext"> Odtwarzaj kolejny</label>
+  </div>
+</section>
+
+<div id="posters-wrap" hidden>
+  <h2 class="gold2">Plakaty</h2>
+  <main id="posters" class="tiles"></main>
+</div>
+<p id="empty-msg" class="empty">Ten odtwarzacz czeka na zestaw filmów.</p>
+
+<footer class="credits">
+  <svg class="rule"><use href="#rule"/></svg>
+  <p class="small">Kinematograf · wstęp wolny</p>
+</footer>
+</div>
+<script src="player.js"></script>
+<script src="viewer.js"></script>
+</body>
+</html>
