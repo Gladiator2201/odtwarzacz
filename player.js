@@ -496,6 +496,35 @@
       applyMediaCover(vid);
     }
 
+    function isStageFullscreen() {
+      var fs = document.fullscreenElement || document.webkitFullscreenElement;
+      return !!fs && (fs === stageEl || (stageEl && stageEl.contains(fs)));
+    }
+
+    var centerTimer = null;
+    function scheduleCenterStage() {
+      if (isStageFullscreen()) return;
+      if (centerTimer) { clearTimeout(centerTimer); centerTimer = null; }
+      function go() {
+        if (isStageFullscreen() || !stageEl || typeof stageEl.scrollIntoView !== "function") return;
+        stageEl.scrollIntoView({ block: "center", behavior: "smooth", inline: "nearest" });
+      }
+      requestAnimationFrame(function () {
+        requestAnimationFrame(go);
+      });
+      centerTimer = setTimeout(function () {
+        centerTimer = null;
+        go();
+      }, 480);
+    }
+
+    function updateSkipButtons() {
+      if (!ui) return;
+      var many = currentList.length > 1;
+      if (ui.btnPrev) ui.btnPrev.disabled = !many;
+      if (ui.btnNext) ui.btnNext.disabled = !many;
+    }
+
     function applyMediaCover(vid) {
       var inner = stageEl.querySelector(".stage-inner") || stageEl;
       var iframe = inner.querySelector("iframe");
@@ -589,6 +618,8 @@
 
       var bar = el("div", "yt-bar");
       var btnPlay = el("button", "yt-ctrl", { type: "button", "aria-label": "Odtwarzaj", text: "▶" });
+      var btnPrev = el("button", "yt-ctrl yt-skip", { type: "button", "aria-label": "Poprzedni", text: "Poprzedni" });
+      var btnNext = el("button", "yt-ctrl yt-skip", { type: "button", "aria-label": "Następny", text: "Następny" });
       var tCur = el("span", "yt-time", { text: "0:00" });
       var seek = el("input", "yt-seek", { type: "range", min: "0", max: "0", value: "0", step: "any", "aria-label": "Pozycja filmu" });
       var tDur = el("span", "yt-time", { text: "0:00" });
@@ -596,6 +627,8 @@
       var vol = el("input", "yt-vol", { type: "range", min: "0", max: "100", value: "100", step: "1", "aria-label": "Głośność" });
       var btnFs = el("button", "yt-ctrl yt-fs", { type: "button", "aria-label": "Pełny ekran", text: "⛶" });
       bar.appendChild(btnPlay);
+      bar.appendChild(btnPrev);
+      bar.appendChild(btnNext);
       bar.appendChild(tCur);
       bar.appendChild(seek);
       bar.appendChild(tDur);
@@ -612,10 +645,11 @@
 
       ui = {
         layer: layer, shield: shield, cover: cover, coverImg: coverImg,
-        coverBtn: coverBtn, bar: bar, btnPlay: btnPlay, seek: seek,
-        tCur: tCur, tDur: tDur, btnMute: btnMute, vol: vol, btnFs: btnFs,
-        coverHint: coverHint
+        coverBtn: coverBtn, bar: bar, btnPlay: btnPlay, btnPrev: btnPrev,
+        btnNext: btnNext, seek: seek, tCur: tCur, tDur: tDur, btnMute: btnMute,
+        vol: vol, btnFs: btnFs, coverHint: coverHint
       };
+      updateSkipButtons();
 
       shield.addEventListener("click", function () {
         if (isYtPlaying()) pauseYt();
@@ -631,6 +665,8 @@
       });
       cover.addEventListener("click", function () { playYt(); });
       btnPlay.addEventListener("click", function () { togglePlay(); });
+      btnPrev.addEventListener("click", function () { playPrev(); });
+      btnNext.addEventListener("click", function () { playNext(); });
       btnMute.addEventListener("click", function () { toggleMute(); });
       btnFs.addEventListener("click", function () { requestFullScreen(); });
 
@@ -751,14 +787,17 @@
       if (captionEl) text(captionEl, fallbackTitle(vid, index));
       if (opts.onChange) opts.onChange(index);
       applyAspect(vid);
+      updateSkipButtons();
 
       var started;
       if (vid.type === "yt") started = playYouTube(vid, !!autoplay);
       else if (vid.type === "drive") started = playDrive(vid);
       else started = playFile(vid, !!autoplay);
       return Promise.resolve(started).then(function () {
+        if (autoplay) scheduleCenterStage();
         return ensureRatio(vid).then(function () {
           applyAspect(vid);
+          if (autoplay) scheduleCenterStage();
         });
       });
     }

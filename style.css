@@ -342,7 +342,7 @@ input:focus,textarea:focus,select:focus,.btn:focus-visible,.tile:focus-visible,.
 .yt-bar{
   position:relative;
   z-index:5;
-  display:flex;align-items:center;gap:8px;
+  display:flex;align-items:center;flex-wrap:wrap;gap:8px;
   width:100%;
   box-sizing:border-box;
   padding:10px 12px;
@@ -366,6 +366,8 @@ input:focus,textarea:focus,select:focus,.btn:focus-visible,.tile:focus-visible,.
 }
 .yt-ctrl:hover{background:linear-gradient(#2b6560,#173c39)}
 .yt-ctrl:focus-visible{outline:3px solid var(--gold2);outline-offset:2px}
+.yt-ctrl[disabled]{opacity:.45;cursor:default}
+.yt-ctrl.yt-skip{padding:0 10px;letter-spacing:.02em}
 .yt-time{
   font:700 13px/1 "Playfair Display SC",serif;
   color:var(--gold2);
@@ -419,6 +421,7 @@ input:focus,textarea:focus,select:focus,.btn:focus-visible,.tile:focus-visible,.
 @media (max-width:700px){
   .yt-vol{display:none}
   .yt-ctrl{min-width:40px;min-height:40px}
+  .yt-ctrl.yt-skip{font-size:13px;padding:0 7px}
   .yt-cover-btn{min-width:80px;min-height:80px;font-size:28px}
   .yt-bar{gap:6px;padding:14px 8px 8px}
 }
