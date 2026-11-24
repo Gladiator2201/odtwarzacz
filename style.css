@@ -234,7 +234,7 @@ input[type=text],textarea,select{
   color:var(--ink);
   min-height:48px;
 }
-textarea{min-height:132px;resize:vertical}
+textarea{min-height:168px;resize:vertical}
 input:focus,textarea:focus,select:focus,.btn:focus-visible,.tile:focus-visible,.chk input:focus-visible,.qr:focus-visible{
   outline:4px solid var(--wine);outline-offset:2px;
 }

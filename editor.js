@@ -157,6 +157,7 @@
           player.play(set.videos, idx, false);
         }
         refreshPosters();
+        syncLinksTextarea();
         onChange();
         persistWorking();
       },
@@ -171,6 +172,7 @@
         else if (idx === j) idx = i;
         if (idx >= 0) player.play(set.videos, idx, false);
         refreshPosters();
+        syncLinksTextarea();
         persistWorking();
       },
       onRatio: function (i, value) {
@@ -208,50 +210,134 @@
     return [];
   }
 
-  /* Wciąga łącza z pola tekstowego do zestawu — też przy zapisie i eksporcie,
-     gdy ktoś wklei adresy i kliknie Eksportuj / Zapisz bez „Dodaj do zestawu”. */
-  async function incorporatePendingLinks() {
-    currentFromForm();
-    if (!Array.isArray(set.videos)) set.videos = videoList(set);
-    var text = $("links") ? $("links").value : "";
-    var optionalTitle = $("title-input") ? $("title-input").value.trim() : "";
-    var found = O.extractLinksFromText(text);
-    if (!found.length) return { added: 0, skipped: 0, found: 0 };
-    var added = 0, skipped = 0;
-    for (var i = 0; i < found.length; i++) {
-      var vid = found[i];
-      var dup = set.videos.some(function (v) { return O.sameVideo(v, vid); });
-      if (dup) { skipped++; continue; }
-      if (optionalTitle && found.length === 1) vid.title = optionalTitle;
-      if (vid.type === "yt") {
-        try { await O.fetchTitle(vid); } catch (e) { /* tytuł opcjonalny */ }
-      }
-      if (!vid.title && optionalTitle && found.length === 1) vid.title = optionalTitle;
-      set.videos.push(vid);
-      added++;
-    }
-    if (added || skipped) {
-      $("links").value = "";
-      $("title-input").value = "";
-    }
-    if (added) {
-      refreshPosters();
-      if (player && player.getIndex() < 0) player.play(set.videos, 0, false);
-      persistWorking();
-    }
-    return { added: added, skipped: skipped, found: found.length };
+  function videoUrl(v) {
+    if (!v) return "";
+    if (v.type === "yt" && (v.id || v.y)) return "https://www.youtube.com/watch?v=" + (v.id || v.y);
+    if (v.type === "drive" && (v.id || v.g)) return "https://drive.google.com/file/d/" + (v.id || v.g) + "/view";
+    return v.url || v.u || "";
   }
 
-  async function addLinks() {
-    var result = await incorporatePendingLinks();
-    if (!result.found) {
-      status("Nie rozpoznałem żadnego łącza. Wklej adres YouTube, pliku albo Google Drive.", true);
-      return;
+  function videoKey(v) {
+    if (!v) return "";
+    if ((v.type === "yt" || v.y) && (v.id || v.y)) return "yt:" + (v.id || v.y);
+    if ((v.type === "drive" || v.g) && (v.id || v.g)) return "drive:" + (v.id || v.g);
+    return (v.type || "file") + ":" + (v.url || v.u || "");
+  }
+
+  function syncLinksTextarea() {
+    var el = $("links");
+    if (!el) return;
+    el.value = videoList(set).map(videoUrl).filter(Boolean).join("\n");
+  }
+
+  function linksFromTextarea() {
+    var el = $("links");
+    var raw = el ? String(el.value || "") : "";
+    var lines = raw.split(/\r?\n/);
+    var found = [];
+    var seen = {};
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].trim();
+      if (!line) continue;
+      var parsed = O.parseLink(line);
+      if (!parsed) {
+        var extracted = O.extractLinksFromText(line);
+        parsed = extracted && extracted[0] ? extracted[0] : null;
+      }
+      if (!parsed) continue;
+      var key = videoKey(parsed);
+      if (!key || seen[key]) continue;
+      seen[key] = true;
+      found.push(parsed);
     }
-    var parts = [];
-    if (result.added) parts.push("Dodano " + result.added + (result.added === 1 ? " film." : " filmy."));
-    if (result.skipped) parts.push("Pominięto " + result.skipped + " (już były w zestawie).");
-    status(parts.join(" ") || "Nic nie dodano.");
+    return found;
+  }
+
+  /* Zestaw = zawartość pola łączy, w tej samej kolejności.
+     Znane filmy (ten sam identyfikator YouTube) zachowują tytuł, miniaturę i proporcje. */
+  async function updateSetFromTextarea() {
+    currentFromForm();
+    if (!Array.isArray(set.videos)) set.videos = videoList(set);
+    var incoming = linksFromTextarea();
+    if (!incoming.length && set.videos.length) {
+      if (!window.confirm("W polu łączy nie ma adresów. Usunąć wszystkie filmy z zestawu?")) {
+        syncLinksTextarea();
+        return { cancelled: true, added: 0, kept: 0, removed: 0, found: 0, total: set.videos.length };
+      }
+    }
+    var byKey = {};
+    set.videos.forEach(function (v) {
+      var k = videoKey(v);
+      if (k && !byKey[k]) byKey[k] = v;
+    });
+    var optionalTitle = $("title-input") ? $("title-input").value.trim() : "";
+    var next = [];
+    var added = 0, kept = 0;
+    for (var i = 0; i < incoming.length; i++) {
+      var parsed = incoming[i];
+      var existing = byKey[videoKey(parsed)];
+      if (existing) {
+        next.push(existing);
+        kept++;
+        continue;
+      }
+      if (optionalTitle && incoming.length === 1) parsed.title = optionalTitle;
+      if (parsed.type === "yt") {
+        try { await O.fetchTitle(parsed); } catch (e) { /* tytuł opcjonalny */ }
+      }
+      if (!parsed.title && optionalTitle && incoming.length === 1) parsed.title = optionalTitle;
+      next.push(parsed);
+      added++;
+    }
+    var removed = set.videos.length - kept;
+    var prevId = null;
+    var cur = currentVidSafe();
+    if (cur) prevId = videoKey(cur);
+    set.videos = next;
+    if ($("title-input")) $("title-input").value = "";
+    syncLinksTextarea();
+    refreshPosters();
+    if (!set.videos.length) {
+      if (player) player.showEmpty("Dodaj łącza, a film pojawi się tutaj.");
+    } else if (player) {
+      var idx = 0;
+      if (prevId) {
+        for (var j = 0; j < set.videos.length; j++) {
+          if (videoKey(set.videos[j]) === prevId) { idx = j; break; }
+        }
+      }
+      player.play(set.videos, idx, false);
+    }
+    persistWorking();
+    return { cancelled: false, added: added, kept: kept, removed: removed, found: incoming.length, total: set.videos.length };
+  }
+
+  function currentVidSafe() {
+    if (!player || typeof player.getIndex !== "function") return null;
+    var i = player.getIndex();
+    return i >= 0 ? set.videos[i] : null;
+  }
+
+  function filmow(n) {
+    n = Math.abs(n);
+    if (n === 1) return "1 film";
+    var mod10 = n % 10, mod100 = n % 100;
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return n + " filmy";
+    return n + " filmów";
+  }
+
+  async function onUpdateSet() {
+    var result = await updateSetFromTextarea();
+    if (result.cancelled) return result;
+    if (!result.found && !result.removed) {
+      status("Nie rozpoznałem żadnego łącza. Wklej adres YouTube, pliku albo Google Drive.", true);
+      return result;
+    }
+    var parts = ["Zestaw uaktualniony: " + filmow(result.total) + "."];
+    if (result.added) parts.push("Dodano " + filmow(result.added) + ".");
+    if (result.removed) parts.push("Usunięto " + filmow(result.removed) + ".");
+    status(parts.join(" "));
+    return result;
   }
 
   function sameName(a, b) {
@@ -260,7 +346,7 @@
 
   async function saveSet() {
     currentFromForm();
-    await incorporatePendingLinks();
+    await updateSetFromTextarea();
     if (!set.videos.length && !set.dedication && !set.name) {
       status("Nie ma czego zapisać — dodaj choć film albo nazwę.", true);
       return;
@@ -300,6 +386,7 @@
     player.showEmpty("Dodaj łącza, a film pojawi się tutaj.");
     refreshPosters();
     $("set-list").value = "";
+    syncLinksTextarea();
     persistWorking();
     status("Nowy, pusty zestaw.");
   }
@@ -324,6 +411,7 @@
     if (set.videos.length) player.play(set.videos, 0, false);
     else player.showEmpty("Dodaj łącza, a film pojawi się tutaj.");
     refreshPosters();
+    syncLinksTextarea();
   }
 
   function loadSet(id) {
@@ -370,7 +458,7 @@
 
   async function exportSet() {
     currentFromForm();
-    await incorporatePendingLinks();
+    await updateSetFromTextarea();
     var videos = serializeSet(set).videos;
     var payload = {
       v: 1,
@@ -484,7 +572,7 @@
 
   async function share() {
     currentFromForm();
-    await incorporatePendingLinks();
+    await updateSetFromTextarea();
     if (!set.videos.length) {
       status("Najpierw dodaj przynajmniej jeden film.", true);
       return;
@@ -504,7 +592,7 @@
 
   async function shareFacebook() {
     currentFromForm();
-    await incorporatePendingLinks();
+    await updateSetFromTextarea();
     if (!set.videos.length) {
       status("Najpierw dodaj przynajmniej jeden film.", true);
       return;
@@ -547,7 +635,7 @@
     });
     $("set-name").addEventListener("input", schedulePersist);
     $("chk-autonext").addEventListener("change", schedulePersist);
-    $("btn-add").addEventListener("click", addLinks);
+    $("btn-update").addEventListener("click", onUpdateSet);
     $("btn-save").addEventListener("click", saveSet);
     $("btn-new").addEventListener("click", newSet);
     $("btn-delete").addEventListener("click", deleteSet);
