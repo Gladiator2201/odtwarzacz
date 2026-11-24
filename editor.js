@@ -86,9 +86,15 @@
       var store = loadStore();
       var snap = localSnap(set);
       store.working = snap;
+      // Autozapis uaktualnia nazwany zestaw tylko gdy nadal jesteśmy do niego podpięci
+      // i nie nadpisuje go pustką (Nowy zestaw / wyczyszczona praca).
       if (set.id) {
         var idx = store.sets.findIndex(function (s) { return s.id === set.id; });
-        if (idx >= 0) store.sets[idx] = snap;
+        if (idx >= 0) {
+          var prev = store.sets[idx];
+          var wiping = !(snap.videos && snap.videos.length) && prev && prev.videos && prev.videos.length;
+          if (!wiping) store.sets[idx] = snap;
+        }
       }
       saveStore(store);
       return true;
@@ -109,7 +115,7 @@
 
   function currentFromForm() {
     set.dedication = $("dedication-input").value.trim();
-    set.name = $("set-name").value.trim() || set.dedication || "Zestaw";
+    set.name = $("set-name").value.trim();
     set.autoNext = $("chk-autonext").checked;
     return set;
   }
@@ -351,6 +357,10 @@
       status("Nie ma czego zapisać — dodaj choć film albo nazwę.", true);
       return;
     }
+    if (!set.name) {
+      set.name = set.dedication || "Zestaw";
+      $("set-name").value = set.name;
+    }
     if (!set.videos.length) {
       if (!window.confirm("Zestaw „" + (set.name || "bez nazwy") + "” nie ma jeszcze filmów. Zapisać pusty?")) return;
     }
@@ -379,7 +389,18 @@
     status("Zestaw zapisany w tej przeglądarce: " + set.name + " (" + snap.videos.length + " " + (snap.videos.length === 1 ? "film" : "filmów") + ").");
   }
 
+  function hasWorkingContent() {
+    var name = $("set-name") ? $("set-name").value.trim() : "";
+    var ded = $("dedication-input") ? $("dedication-input").value.trim() : "";
+    var links = $("links") ? $("links").value.trim() : "";
+    return (set.videos && set.videos.length) || !!name || !!ded || !!links;
+  }
+
   function newSet() {
+    if (hasWorkingContent()) {
+      if (!window.confirm("Wyczyścić bieżącą pracę? Zapisane zestawy zostaną.")) return;
+    }
+    if (persistTimer) { clearTimeout(persistTimer); persistTimer = null; }
     set = { id: "", name: "", dedication: "", autoNext: false, videos: [] };
     importedFileName = "";
     applyToForm();
@@ -387,8 +408,15 @@
     refreshPosters();
     $("set-list").value = "";
     syncLinksTextarea();
-    persistWorking();
-    status("Nowy, pusty zestaw.");
+    try {
+      var store = loadStore();
+      store.working = localSnap(set);
+      store.currentId = "";
+      saveStore(store);
+    } catch (e) { /* praca jest już pusta na ekranie */ }
+    refreshList();
+    $("set-list").value = "";
+    status("Nowy, pusty zestaw. Zapisane zestawy są nadal na liście.");
   }
 
   function deleteSet() {
