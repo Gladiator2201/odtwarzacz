@@ -393,17 +393,33 @@
 
   function deleteSet() {
     currentFromForm();
-    if (!set.id) { status("Ten zestaw nie był jeszcze zapisany pod nazwą.", true); return; }
-    if (!window.confirm("Usunąć zapis „" + (set.name || "bez nazwy") + "” z tej przeglądarki?")) return;
     var store = loadStore();
-    store.sets = store.sets.filter(function (s) { return s.id !== set.id; });
-    if (store.currentId === set.id) store.currentId = "";
-    set.id = "";
-    store.working = serializeSet(set);
-    try { saveStore(store); } catch (e) {}
-    newSet();
+    var selId = $("set-list").value || "";
+    var target = store.sets.filter(function (s) { return s.id === selId; })[0];
+    if (!target) {
+      status("Najpierw wybierz zestaw z listy „Zapisane zestawy”, a potem kliknij „Usuń zapis”.", true);
+      $("set-list").focus();
+      return;
+    }
+    var label = target.name || target.dedication || "bez nazwy";
+    if (!window.confirm("Usunąć zapis „" + label + "” z tej przeglądarki?")) return;
+    if (persistTimer) { clearTimeout(persistTimer); persistTimer = null; }
+    store.sets = store.sets.filter(function (s) { return s.id !== target.id; });
+    if (store.currentId === target.id) store.currentId = "";
+    if (set.id === target.id || sameName(set.name, target.name)) {
+      /* bieżąca praca zostaje, ale bez powiązania z usuniętym zapisem */
+      set.id = "";
+      set.name = "";
+      $("set-name").value = "";
+    }
+    store.working = localSnap(set);
+    try { saveStore(store); } catch (e) {
+      status("Nie udało się usunąć zapisu w tej przeglądarce.", true);
+      return;
+    }
     refreshList();
-    status("Zapis usunięty.");
+    $("set-list").value = "";
+    status("Usunięto zapis „" + label + "”. Filmy na ekranie zostały — możesz je zapisać pod nową nazwą albo kliknąć „Nowy zestaw”.");
   }
 
   function showLoadedSet() {
