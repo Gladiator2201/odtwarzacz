@@ -325,6 +325,7 @@
     var dragging = false;
     var coverUntilPlay = true;
     var lastVolume = 100;
+    var pendingPlay = false;
 
     function shouldAutoNext() {
       return typeof opts.autoNext === "function" ? !!opts.autoNext() : !!opts.autoNext;
@@ -550,13 +551,17 @@
     }
 
     function playYt() {
-      if (!ytPlayer) return;
       coverUntilPlay = true;
+      if (!ytPlayer || !ytReady) {
+        pendingPlay = true;
+        return;
+      }
       try {
         if (isEnded) {
           isEnded = false;
           ytPlayer.seekTo(0, true);
         }
+        pendingPlay = false;
         ytPlayer.playVideo();
       } catch (e) {}
     }
@@ -709,7 +714,8 @@
               } catch (e) {}
               syncSeek();
               setMuteIcon();
-              if (autoplay) {
+              if (autoplay || pendingPlay) {
+                pendingPlay = false;
                 try { ytPlayer.playVideo(); } catch (e) {}
               } else {
                 showCover();
