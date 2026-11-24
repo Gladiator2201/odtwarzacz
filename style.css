@@ -86,20 +86,26 @@ button{cursor:pointer}
 }
 #stage{
   --ar:1.777777;
+  --yt-bar-h:64px;
   position:relative;
   width:min(100%, calc(80vh * var(--ar)));
-  max-height:80vh;
-  aspect-ratio:var(--ar);
   margin:0 auto;
   background:#000;
   overflow:hidden;
   border-radius:4px;
-  transition:width .45s ease, aspect-ratio .45s ease;
+  transition:width .45s ease;
+  display:flex;
+  flex-direction:column;
 }
 .stage-inner{
-  position:absolute;inset:0;
+  position:relative;
+  width:100%;
+  max-height:80vh;
+  aspect-ratio:var(--ar);
   overflow:hidden;
   background:#000;
+  flex:0 0 auto;
+  transition:aspect-ratio .45s ease;
 }
 #stage iframe,#stage video{
   position:absolute;inset:0;width:100%;height:100%;border:0;background:#000;display:block;
@@ -300,18 +306,7 @@ input:focus,textarea:focus,select:focus,.btn:focus-visible,.tile:focus-visible,.
   background:transparent;
   cursor:pointer;
 }
-.yt-topmask{
-  position:absolute;left:0;right:0;top:0;
-  height:88px;z-index:4;
-  pointer-events:none;
-  background:#000;
-}
-.yt-bottommask{
-  position:absolute;left:0;right:0;bottom:0;
-  height:72px;z-index:4;
-  pointer-events:none;
-  background:#000;
-}
+/* YT title/logo: no solid masks over the picture — full frame stays visible. */
 .yt-cover{
   position:absolute;inset:0;
   z-index:3;
@@ -345,12 +340,16 @@ input:focus,textarea:focus,select:focus,.btn:focus-visible,.tile:focus-visible,.
 .yt-cover-btn:hover{background:#2b6560cc;transform:scale(1.05)}
 .yt-cover-btn:focus-visible{outline:4px solid var(--gold2);outline-offset:3px}
 .yt-bar{
-  position:absolute;left:0;right:0;bottom:0;
+  position:relative;
   z-index:5;
   display:flex;align-items:center;gap:8px;
-  padding:14px 12px 10px;
+  width:100%;
+  box-sizing:border-box;
+  padding:10px 12px;
   background:#000;
   color:var(--gold2);
+  flex:0 0 auto;
+  border-top:1px solid #c8962e55;
 }
 .yt-ctrl{
   appearance:none;-webkit-appearance:none;
@@ -398,17 +397,23 @@ input:focus,textarea:focus,select:focus,.btn:focus-visible,.tile:focus-visible,.
   width:100vw!important;height:100vh!important;
   max-width:none!important;max-height:none!important;
   aspect-ratio:auto;border-radius:0;background:#000;
-  display:flex;align-items:center;justify-content:center;
-  margin:0;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  margin:0;overflow:hidden;
 }
 #stage:fullscreen .stage-inner,
 #stage:-webkit-full-screen .stage-inner{
   position:relative;inset:auto;
-  width:min(100vw, calc(100vh * var(--ar, 1.777777)));
-  height:min(100vh, calc(100vw / var(--ar, 1.777777)));
+  width:min(100vw, calc((100vh - var(--yt-bar-h, 64px)) * var(--ar, 1.777777)));
+  height:min(calc(100vh - var(--yt-bar-h, 64px)), calc(100vw / var(--ar, 1.777777)));
+  max-height:none;
   aspect-ratio:var(--ar, 16/9);
   flex:0 0 auto;
   overflow:hidden;
+}
+#stage:fullscreen .yt-bar,
+#stage:-webkit-full-screen .yt-bar{
+  width:min(100vw, calc((100vh - var(--yt-bar-h, 64px)) * var(--ar, 1.777777)));
 }
 
 @media (max-width:700px){
@@ -460,13 +465,24 @@ input:focus,textarea:focus,select:focus,.btn:focus-visible,.tile:focus-visible,.
 
 .ratio-fld{
   display:flex;flex-direction:column;align-items:stretch;gap:4px;
-  width:100%;margin-top:6px;
-  font:700 12px "Playfair Display SC",serif;
-  color:var(--teal);letter-spacing:.04em;
+  width:100%;margin-top:10px;padding:10px 8px 8px;
+  box-sizing:border-box;
+  background:#1d1410;
+  border:2px solid var(--gold);
+  border-radius:10px;
+  font:700 15px "Playfair Display SC",serif;
+  color:var(--gold2);letter-spacing:.06em;
+  text-transform:uppercase;
+}
+.ratio-fld span{display:block;text-align:center}
+.ratio-fld .ratio-hint{
+  font:italic 500 13px/1.3 "Cormorant Garamond",serif;
+  color:var(--cream);
+  letter-spacing:0;text-transform:none;text-align:center;
 }
 .ratio-fld select{
-  min-height:42px;width:100%;
+  min-height:48px;width:100%;
   background:#fff8e4;border:2px solid var(--gold);border-radius:8px;
   padding:6px 8px;color:var(--ink);
-  font:600 16px "Cormorant Garamond",Georgia,serif;
+  font:700 18px "Cormorant Garamond",Georgia,serif;
 }

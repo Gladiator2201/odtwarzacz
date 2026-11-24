@@ -578,8 +578,6 @@
       layer.appendChild(host);
 
       var shield = el("div", "yt-shield", { "aria-hidden": "true" });
-      var topmask = el("div", "yt-topmask", { "aria-hidden": "true" });
-      var bottommask = el("div", "yt-bottommask", { "aria-hidden": "true" });
 
       var cover = el("div", "yt-cover");
       var coverImg = el("img", "yt-cover-img", { alt: "" });
@@ -608,10 +606,9 @@
       var inner = ensureInner();
       inner.appendChild(layer);
       inner.appendChild(shield);
-      inner.appendChild(topmask);
-      inner.appendChild(bottommask);
       inner.appendChild(cover);
-      inner.appendChild(bar);
+      /* Pasek pod kadrem, nie na obrazie — pełna ramka 16:9 zostaje widoczna. */
+      stageEl.appendChild(bar);
 
       ui = {
         layer: layer, shield: shield, cover: cover, coverImg: coverImg,
@@ -1040,9 +1037,12 @@
         ratioBox.className = "ratio-fld";
         var ratioLbl = document.createElement("span");
         ratioLbl.textContent = "Proporcje";
+        var ratioHint = document.createElement("em");
+        ratioHint.className = "ratio-hint";
+        ratioHint.textContent = "Auto pokazuje cały kadr. 4:3 przycina boki.";
         var sel = document.createElement("select");
         sel.setAttribute("aria-label", "Proporcje obrazu");
-        [["", "Auto"], ["16:9", "16:9"], ["4:3", "4:3"], ["9:16", "9:16"], ["1:1", "1:1"]].forEach(function (opt) {
+        [["", "Auto (cały kadr)"], ["16:9", "16:9"], ["4:3", "4:3"], ["9:16", "9:16"], ["1:1", "1:1"]].forEach(function (opt) {
           var option = document.createElement("option");
           option.value = opt[0];
           option.textContent = opt[1];
@@ -1055,6 +1055,7 @@
         });
         ratioBox.appendChild(ratioLbl);
         ratioBox.appendChild(sel);
+        ratioBox.appendChild(ratioHint);
         tools.appendChild(ratioBox);
         art.appendChild(tools);
       }
