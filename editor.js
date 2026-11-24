@@ -196,6 +196,7 @@
     $("btn-prev").disabled = !has;
     $("btn-next").disabled = !has;
     $("btn-full").disabled = !has;
+    $("btn-cc").disabled = !has;
     $("btn-share").disabled = !has;
     var fb = $("btn-fb");
     if (fb) fb.disabled = !has;
@@ -704,6 +705,7 @@
     $("btn-prev").addEventListener("click", function () { player.playPrev(); });
     $("btn-next").addEventListener("click", function () { player.playNext(); });
     $("btn-full").addEventListener("click", function () { player.requestFullScreen(); });
+    $("btn-cc").addEventListener("click", function () { player.toggleCaptions(); });
 
     refreshList();
     var store = loadStore();

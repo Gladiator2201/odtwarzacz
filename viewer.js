@@ -31,6 +31,7 @@
     $("btn-prev").disabled = !has;
     $("btn-next").disabled = !has;
     $("btn-full").disabled = !has;
+    $("btn-cc").disabled = !has;
   }
 
   async function loadFromLocation() {
@@ -69,6 +70,7 @@
     $("btn-prev").addEventListener("click", function () { player.playPrev(); });
     $("btn-next").addEventListener("click", function () { player.playNext(); });
     $("btn-full").addEventListener("click", function () { player.requestFullScreen(); });
+    $("btn-cc").addEventListener("click", function () { player.toggleCaptions(); });
     var fb = $("btn-fb");
     if (fb) {
       fb.addEventListener("click", function () {

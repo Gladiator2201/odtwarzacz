@@ -148,6 +148,10 @@ button{cursor:pointer}
   background:linear-gradient(#2b6560,#173c39);
   box-shadow:inset 0 0 0 2px #f3d27a55,0 4px 0 #0d2422;
 }
+.btn[aria-pressed="true"],.btn.on{
+  background:linear-gradient(#8f2a37,#5e1520);
+  box-shadow:inset 0 0 0 2px #f3d27a55,0 4px 0 #3b0d14;
+}
 .chk{
   display:inline-flex;align-items:center;gap:10px;
   font:700 16px "Playfair Display SC",serif;

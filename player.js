@@ -382,6 +382,8 @@
     var coverUntilPlay = true;
     var lastVolume = 100;
     var pendingPlay = false;
+    var captionsOn = false;
+    var captionsTimer = null;
 
     function shouldAutoNext() {
       return typeof opts.autoNext === "function" ? !!opts.autoNext() : !!opts.autoNext;
@@ -396,6 +398,51 @@
         if (ytPlayer && typeof ytPlayer.getPlayerState === "function") return ytPlayer.getPlayerState();
       } catch (e) {}
       return -1;
+    }
+
+    function applyCaptionsPolicy() {
+      if (!ytPlayer || !ytReady) return;
+      try {
+        if (captionsOn) {
+          ytPlayer.loadModule("captions");
+        } else {
+          ytPlayer.unloadModule("captions");
+          ytPlayer.unloadModule("cc");
+          ytPlayer.setOption("captions", "track", {});
+        }
+      } catch (e) {}
+      syncCaptionsButton();
+    }
+
+    function scheduleCaptionsPolicy() {
+      applyCaptionsPolicy();
+      if (captionsTimer) {
+        clearTimeout(captionsTimer);
+        captionsTimer = null;
+      }
+      // YouTube often re-enables auto-captions just after a video starts.
+      captionsTimer = setTimeout(function () {
+        applyCaptionsPolicy();
+        captionsTimer = setTimeout(applyCaptionsPolicy, 800);
+      }, 200);
+    }
+
+    function syncCaptionsButton() {
+      var btn = document.getElementById("btn-cc");
+      if (!btn) return;
+      btn.setAttribute("aria-pressed", captionsOn ? "true" : "false");
+      if (captionsOn) btn.classList.add("on");
+      else btn.classList.remove("on");
+    }
+
+    function toggleCaptions() {
+      captionsOn = !captionsOn;
+      applyCaptionsPolicy();
+      return captionsOn;
+    }
+
+    function isCaptionsOn() {
+      return captionsOn;
     }
 
     function isYtPlaying() {
@@ -737,6 +784,7 @@
         syncSeek();
         setPlayIcon(true);
         setMuteIcon();
+        scheduleCaptionsPolicy();
       } else if (e.data === S.PAUSED) {
         stopTimer();
         syncSeek();
@@ -809,6 +857,7 @@
         } catch (e) {
           return createYtPlayer(vid, autoplay);
         }
+        scheduleCaptionsPolicy();
         return Promise.resolve();
       }
       return createYtPlayer(vid, autoplay);
@@ -856,6 +905,7 @@
                 ytPlayer.setVolume(lastVolume);
                 if (ui) ui.vol.value = String(lastVolume);
               } catch (e) {}
+              scheduleCaptionsPolicy();
               applyAspect(currentVid());
               syncSeek();
               setMuteIcon();
@@ -997,6 +1047,8 @@
       playPrev: playPrev,
       requestFullScreen: requestFullScreen,
       togglePlay: togglePlay,
+      toggleCaptions: toggleCaptions,
+      isCaptionsOn: isCaptionsOn,
       getIndex: getIndex,
       showEmpty: showEmpty,
       applyAspect: function (vid) { applyAspect(vid || currentVid()); }
