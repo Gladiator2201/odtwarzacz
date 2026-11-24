@@ -21,6 +21,8 @@
     });
     $("posters-wrap").hidden = set.videos.length === 0;
     $("empty-msg").hidden = set.videos.length > 0;
+    var fb = $("btn-fb");
+    if (fb) fb.hidden = set.videos.length === 0;
   }
 
   function onChange() {
@@ -31,12 +33,13 @@
     $("btn-full").disabled = !has;
   }
 
-  async function loadFromHash() {
-    var decoded = await O.decodeHash(location.hash);
+  async function loadFromLocation() {
+    var payload = O.payloadFromLocation();
+    var decoded = await O.decodeHash(payload);
     if (!decoded || !decoded.videos.length) {
       set = { dedication: "", name: "", autoNext: false, videos: [] };
       applyDedication("");
-      if (!location.hash || location.hash === "#") {
+      if (!payload) {
         player.showEmpty("Kurtyna jest jeszcze zasunięta.");
         $("empty-msg").textContent = "Ten odtwarzacz czeka na zestaw filmów.";
       } else {
@@ -66,12 +69,21 @@
     $("btn-prev").addEventListener("click", function () { player.playPrev(); });
     $("btn-next").addEventListener("click", function () { player.playNext(); });
     $("btn-full").addEventListener("click", function () { player.requestFullScreen(); });
+    var fb = $("btn-fb");
+    if (fb) {
+      fb.addEventListener("click", function () {
+        var payload = O.payloadFromLocation();
+        if (!payload) return;
+        O.openFacebookShare(payload);
+      });
+    }
     document.addEventListener("keydown", function (e) {
       if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
       if (e.key === "ArrowRight") { e.preventDefault(); player.playNext(); }
       if (e.key === "ArrowLeft") { e.preventDefault(); player.playPrev(); }
     });
-    window.addEventListener("hashchange", function () { loadFromHash(); });
-    loadFromHash();
+    window.addEventListener("hashchange", function () { loadFromLocation(); });
+    window.addEventListener("popstate", function () { loadFromLocation(); });
+    loadFromLocation();
   });
 })();

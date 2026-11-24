@@ -102,6 +102,8 @@
     $("btn-next").disabled = !has;
     $("btn-full").disabled = !has;
     $("btn-share").disabled = !has;
+    var fb = $("btn-fb");
+    if (fb) fb.disabled = !has;
   }
 
   function status(msg, isErr) {
@@ -251,6 +253,17 @@
     $("share-url").select();
   }
 
+  async function shareFacebook() {
+    currentFromForm();
+    if (!set.videos.length) {
+      status("Najpierw dodaj przynajmniej jeden film.", true);
+      return;
+    }
+    var hash = await O.encodeSet(set);
+    var opened = O.openFacebookShare(hash);
+    if (!opened) status("Przeglądarka zablokowała okno Facebooka — proszę zezwolić na wyskakujące okna.", true);
+  }
+
   function closeShare() {
     $("ov").hidden = true;
   }
@@ -289,7 +302,9 @@
       if (this.value) loadSet(this.value);
     });
     $("btn-share").addEventListener("click", share);
+    $("btn-fb").addEventListener("click", shareFacebook);
     $("btn-copy").addEventListener("click", copyLink);
+    $("btn-fb-modal").addEventListener("click", shareFacebook);
     $("btn-close").addEventListener("click", closeShare);
     $("ov").addEventListener("click", function (e) {
       if (e.target === $("ov")) closeShare();

@@ -274,3 +274,165 @@ input:focus,textarea:focus,select:focus,.btn:focus-visible,.tile:focus-visible,.
   .panel{padding:14px 12px}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important}}
+
+/* Custom YouTube chrome: clicks never reach the iframe */
+.yt-layer{
+  position:absolute;inset:0;
+  overflow:hidden;background:#000;
+  z-index:1;
+}
+.yt-layer iframe,#stage.has-yt iframe{
+  position:absolute;inset:0;width:100%;height:100%;
+  border:0;pointer-events:none;background:#000;
+}
+.yt-shield{
+  position:absolute;inset:0;
+  z-index:2;
+  background:transparent;
+  cursor:pointer;
+}
+.yt-topmask{
+  position:absolute;left:0;right:0;top:0;
+  height:88px;z-index:4;
+  pointer-events:none;
+  background:#000;
+}
+.yt-bottommask{
+  position:absolute;left:0;right:0;bottom:0;
+  height:72px;z-index:4;
+  pointer-events:none;
+  background:#000;
+}
+.yt-cover{
+  position:absolute;inset:0;
+  z-index:3;
+  display:flex;align-items:center;justify-content:center;
+  background:#000;
+  cursor:pointer;
+}
+.yt-cover[hidden]{display:none!important}
+.yt-cover-img{
+  position:absolute;inset:0;width:100%;height:100%;
+  object-fit:cover;
+  filter:brightness(.72);
+}
+.yt-cover-img[hidden]{display:none}
+.yt-cover::after{
+  content:"";position:absolute;inset:0;
+  background:radial-gradient(ellipse at 50% 50%,#0000 0%,#0006 70%,#0009 100%);
+  pointer-events:none;
+}
+.yt-cover-btn{
+  position:relative;z-index:1;
+  min-width:92px;min-height:92px;padding:8px 18px;
+  border-radius:50%;
+  border:3px solid var(--gold2);
+  background:#7a1f2bcc;
+  color:#fff8e0;
+  font:400 34px/1 "Abril Fatface",serif;
+  box-shadow:0 0 0 6px #0004,0 8px 24px #0008;
+  cursor:pointer;
+}
+.yt-cover-btn:hover{background:#2b6560cc;transform:scale(1.05)}
+.yt-cover-btn:focus-visible{outline:4px solid var(--gold2);outline-offset:3px}
+.yt-bar{
+  position:absolute;left:0;right:0;bottom:0;
+  z-index:5;
+  display:flex;align-items:center;gap:8px;
+  padding:14px 12px 10px;
+  background:#000;
+  color:var(--gold2);
+}
+.yt-ctrl{
+  appearance:none;-webkit-appearance:none;
+  flex:0 0 auto;
+  min-width:44px;min-height:44px;
+  padding:0 8px;
+  border:2px solid var(--gold);
+  border-radius:10px;
+  background:linear-gradient(#8f2a37,#5e1520);
+  color:#fff8e0;
+  font:700 16px/1 "Playfair Display SC",serif;
+  box-shadow:inset 0 0 0 1px #f3d27a55;
+  cursor:pointer;
+}
+.yt-ctrl:hover{background:linear-gradient(#2b6560,#173c39)}
+.yt-ctrl:focus-visible{outline:3px solid var(--gold2);outline-offset:2px}
+.yt-time{
+  font:700 13px/1 "Playfair Display SC",serif;
+  color:var(--gold2);
+  min-width:3.2em;
+  text-align:center;
+  letter-spacing:.03em;
+  user-select:none;
+}
+.yt-seek,.yt-vol{
+  -webkit-appearance:none;appearance:none;
+  height:8px;border-radius:8px;
+  background:#fff3;outline:none;
+  accent-color:var(--gold);
+  cursor:pointer;
+}
+.yt-seek{flex:1 1 auto;min-width:50px}
+.yt-vol{flex:0 0 84px;width:84px}
+.yt-seek::-webkit-slider-thumb,.yt-vol::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:18px;height:18px;border-radius:50%;
+  background:var(--gold2);border:2px solid var(--wine);
+}
+.yt-seek::-moz-range-thumb,.yt-vol::-moz-range-thumb{
+  width:18px;height:18px;border-radius:50%;
+  background:var(--gold2);border:2px solid var(--wine);
+}
+
+#stage:fullscreen,#stage:-webkit-full-screen{
+  width:100vw;height:100vh;max-width:none;
+  aspect-ratio:auto;border-radius:0;background:#000;
+}
+
+@media (max-width:700px){
+  .yt-vol{display:none}
+  .yt-ctrl{min-width:40px;min-height:40px}
+  .yt-cover-btn{min-width:80px;min-height:80px;font-size:28px}
+  .yt-bar{gap:6px;padding:14px 8px 8px}
+}
+.yt-cover-hint{
+  position:relative;z-index:1;
+  margin-top:12px;
+  font:700 18px "Playfair Display SC",serif;
+  color:var(--gold2);
+  text-shadow:0 2px 8px #000a;
+  pointer-events:none;
+  min-height:1.2em;
+}
+.yt-cover{flex-direction:column;gap:4px}
+
+/* Facebook share — discreet in the viewer, regular in the editor */
+.share-fb-wrap{text-align:center;margin:0 0 10px}
+.btn-fb{
+  appearance:none;-webkit-appearance:none;
+  font:700 14px "Playfair Display SC",serif;
+  color:var(--teal);
+  background:transparent;
+  border:1.5px solid var(--teal);
+  padding:8px 16px;
+  border-radius:24px;
+  min-height:42px;
+  cursor:pointer;
+  letter-spacing:.03em;
+}
+.btn-fb:hover{background:var(--teal);color:var(--cream)}
+.btn-fb:focus-visible{outline:3px solid var(--wine);outline-offset:2px}
+.btn-fb[hidden],.share-fb-wrap[hidden]{display:none!important}
+.btn-fb.solid{
+  color:#fff8e0;
+  background:linear-gradient(#3b5998,#2d4373);
+  border-color:#f3d27a;
+  box-shadow:inset 0 0 0 2px #f3d27a55,0 4px 0 #1c2a4a;
+  font-size:16px;
+  min-height:48px;
+  padding:12px 18px;
+  border-radius:30px;
+  border-width:2px;
+}
+.btn-fb.solid:hover{background:linear-gradient(#2d4373,#1c2a4a)}
