@@ -4,6 +4,7 @@
   var STORE = "odtwarzacz.zestawy.v1";
   var set = { id: "", name: "", dedication: "", autoNext: false, videos: [] };
   var player;
+  var importedFileName = "";
 
   function $(id) { return document.getElementById(id); }
 
@@ -70,13 +71,20 @@
       autoNext: snap.autoNext,
       videos: snap.videos.slice()
     };
+    if (src && src.importFileName) importedFileName = sanitizeDownloadName(src.importFileName);
     return set;
+  }
+
+  function localSnap(src) {
+    var snap = serializeSet(src);
+    if (importedFileName) snap.importFileName = importedFileName;
+    return snap;
   }
 
   function persistWorking() {
     try {
       var store = loadStore();
-      var snap = serializeSet(set);
+      var snap = localSnap(set);
       store.working = snap;
       if (set.id) {
         var idx = store.sets.findIndex(function (s) { return s.id === set.id; });
@@ -269,7 +277,7 @@
       set.id = other.id;
     }
     if (!set.id) set.id = uid();
-    var snap = serializeSet(set);
+    var snap = localSnap(set);
     var idx = store.sets.findIndex(function (s) { return s.id === set.id; });
     if (idx >= 0) store.sets[idx] = snap;
     else store.sets.push(snap);
@@ -287,6 +295,7 @@
 
   function newSet() {
     set = { id: "", name: "", dedication: "", autoNext: false, videos: [] };
+    importedFileName = "";
     applyToForm();
     player.showEmpty("Dodaj łącza, a film pojawi się tutaj.");
     refreshPosters();
@@ -321,9 +330,10 @@
     var store = loadStore();
     var found = store.sets.filter(function (s) { return s.id === id; })[0];
     if (!found) return;
+    importedFileName = "";
     applySerialized(found);
     store.currentId = set.id;
-    store.working = serializeSet(set);
+    store.working = localSnap(set);
     try { saveStore(store); } catch (e) {}
     showLoadedSet();
     status("Wczytano: " + (set.name || "zestaw") + " (" + set.videos.length + " " + (set.videos.length === 1 ? "film" : "filmów") + ").");
@@ -332,6 +342,19 @@
   function fileSafeName(name) {
     var n = String(name || "zestaw").trim().replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim();
     return n || "zestaw";
+  }
+
+  function sanitizeDownloadName(name) {
+    var n = String(name || "").trim().replace(/^.*[\\/]/, "");
+    n = n.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim();
+    if (!n || n === "." || n === "..") return "";
+    if (!/\.json$/i.test(n)) n += ".json";
+    return n;
+  }
+
+  function exportDownloadName(payload) {
+    if (importedFileName) return importedFileName;
+    return "zestaw-" + fileSafeName(payload.name || payload.dedication) + ".json";
   }
 
   function downloadJson(filename, text) {
@@ -368,8 +391,9 @@
       status("Nie udało się zapisać pliku JSON.", true);
       return;
     }
-    downloadJson("zestaw-" + fileSafeName(payload.name || payload.dedication) + ".json", text);
-    status("Zapisano plik zapasowy z " + payload.videos.length + " " + (payload.videos.length === 1 ? "filmem" : "filmami") + ".");
+    var fname = exportDownloadName(payload);
+    downloadJson(fname, text);
+    status("Zapisano plik " + fname + " z " + payload.videos.length + " " + (payload.videos.length === 1 ? "filmem" : "filmami") + ".");
   }
 
   function importSetFromObject(data) {
@@ -410,17 +434,21 @@
     showLoadedSet();
     persistWorking();
     $("set-list").value = "";
-    status("Wczytano z pliku: " + (set.name || "zestaw") + " (" + set.videos.length + " " + (set.videos.length === 1 ? "film" : "filmów") + "). Możesz go teraz zapisać w przeglądarce.");
+    status("Wczytano z pliku" + (importedFileName ? " " + importedFileName : "") + ": " + (set.name || "zestaw") + " (" + set.videos.length + " " + (set.videos.length === 1 ? "film" : "filmów") + "). Eksport znów zapisze ten sam plik.");
   }
 
   function importSetFile(file) {
     if (!file) return;
     var reader = new FileReader();
     reader.onload = function () {
+      var prevName = importedFileName;
       try {
         var data = JSON.parse(String(reader.result || ""));
+        var name = sanitizeDownloadName(file && file.name);
+        if (name) importedFileName = name;
         importSetFromObject(data);
       } catch (e) {
+        importedFileName = prevName;
         status("Ten plik nie wygląda na zapis zestawu.", true);
       }
     };
