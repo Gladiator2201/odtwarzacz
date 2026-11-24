@@ -43,6 +43,13 @@
         if (vid.type === "yt") item.y = vid.id;
         else if (vid.type === "drive") item.g = vid.id;
         else item.u = vid.url;
+        if (vid.ratioOverride === "16:9" || vid.ratioOverride === "4:3" || vid.ratioOverride === "9:16" || vid.ratioOverride === "1:1") {
+          item.o = vid.ratioOverride;
+        }
+        if (typeof vid.ratio === "number" && isFinite(vid.ratio) && vid.ratio > 0.05 && vid.ratio < 20) {
+          item.p = Math.round(vid.ratio * 10000) / 10000;
+        }
+        if (vid.short) item.s = 1;
         return item;
       })
     };
@@ -59,25 +66,48 @@
     };
   }
 
+  var RATIO_PRESETS = { "16:9": 16 / 9, "4:3": 4 / 3, "9:16": 9 / 16, "1:1": 1 };
+
+  function applyStoredRatio(vid, item) {
+    if (!vid || !item) return vid;
+    if (item.o && RATIO_PRESETS[item.o]) vid.ratioOverride = item.o;
+    if (typeof item.p === "number" && isFinite(item.p) && item.p > 0.05 && item.p < 20) vid.ratio = item.p;
+    if (item.s) vid.short = true;
+    return vid;
+  }
+
+  function displayRatio(vid) {
+    if (!vid) return 16 / 9;
+    if (vid.ratioOverride && RATIO_PRESETS[vid.ratioOverride]) return RATIO_PRESETS[vid.ratioOverride];
+    if (vid.short) return 9 / 16;
+    if (typeof vid.ratio === "number" && isFinite(vid.ratio) && vid.ratio > 0.05) return vid.ratio;
+    return 16 / 9;
+  }
+
+  function mediaRatio(vid) {
+    if (!vid) return 16 / 9;
+    if (typeof vid.ratio === "number" && isFinite(vid.ratio) && vid.ratio > 0.05) return vid.ratio;
+    if (vid.short) return 9 / 16;
+    return 16 / 9;
+  }
+
   function inflateItem(item) {
     if (!item || typeof item !== "object") return null;
+    var vid = null;
     if (item.y) {
       var id = String(item.y).trim();
       if (!/^[A-Za-z0-9_-]{11}$/.test(id)) return null;
-      return { type: "yt", id: id, url: "https://www.youtube.com/watch?v=" + id, title: item.t || "", thumb: youtubeThumb(id) };
-    }
-    if (item.g) {
+      vid = { type: "yt", id: id, url: "https://www.youtube.com/watch?v=" + id, title: item.t || "", thumb: youtubeThumb(id) };
+    } else if (item.g) {
       var gid = String(item.g).trim();
       if (!/^[A-Za-z0-9_-]+$/.test(gid)) return null;
-      return { type: "drive", id: gid, url: "https://drive.google.com/file/d/" + gid + "/view", title: item.t || "", thumb: "" };
+      vid = { type: "drive", id: gid, url: "https://drive.google.com/file/d/" + gid + "/view", title: item.t || "", thumb: "" };
+    } else if (item.u) {
+      vid = parseLink(String(item.u));
+      if (!vid) return null;
+      vid.title = item.t || vid.title || "";
     }
-    if (item.u) {
-      var parsed = parseLink(String(item.u));
-      if (!parsed) return null;
-      parsed.title = item.t || parsed.title || "";
-      return parsed;
-    }
-    return null;
+    return applyStoredRatio(vid, item);
   }
 
   async function deflateBytes(bytes) {
@@ -207,7 +237,9 @@
     if (!s) return null;
     var yt = extractYouTubeId(s);
     if (yt && (isHttpUrl(s) || /^[A-Za-z0-9_-]{11}$/.test(s))) {
-      return { type: "yt", id: yt, url: "https://www.youtube.com/watch?v=" + yt, title: "", thumb: youtubeThumb(yt) };
+      var rec = { type: "yt", id: yt, url: "https://www.youtube.com/watch?v=" + yt, title: "", thumb: youtubeThumb(yt) };
+      if (/\/shorts\//i.test(s)) rec.short = true;
+      return rec;
     }
     var gd = extractDriveId(s);
     if (gd) {
@@ -261,16 +293,40 @@
     return "Film " + (index + 1);
   }
 
+  function applyOEmbedData(vid, data) {
+    if (!data) return;
+    if (data.title && !vid.title) vid.title = data.title;
+    if (data.thumbnail_url) vid.thumb = data.thumbnail_url;
+    var w = Number(data.width), h = Number(data.height);
+    if (w > 0 && h > 0) vid.ratio = w / h;
+  }
+
+  async function fetchJson(url) {
+    var res = await fetch(url);
+    if (!res.ok) return null;
+    return await res.json();
+  }
+
   async function fetchTitle(vid) {
     if (vid.type !== "yt" || !vid.id) return vid;
+    var watch = "https://www.youtube.com/watch?v=" + vid.id;
+    var qs = "url=" + encodeURIComponent(watch) + "&format=json&maxwidth=2000&maxheight=2000";
+    var data = null;
     try {
-      var url = "https://noembed.com/embed?url=" + encodeURIComponent("https://www.youtube.com/watch?v=" + vid.id);
-      var res = await fetch(url);
-      if (!res.ok) return vid;
-      var data = await res.json();
-      if (data && data.title && !vid.title) vid.title = data.title;
-      if (data && data.thumbnail_url) vid.thumb = data.thumbnail_url;
-    } catch (e) { /* zostaje tytuł użytkownika albo zastępczy */ }
+      data = await fetchJson("https://www.youtube.com/oembed?" + qs);
+    } catch (e) { data = null; }
+    if (!data) {
+      try {
+        data = await fetchJson("https://noembed.com/embed?" + qs);
+      } catch (e) { data = null; }
+    }
+    applyOEmbedData(vid, data);
+    return vid;
+  }
+
+  async function ensureRatio(vid) {
+    if (!vid) return vid;
+    if (vid.type === "yt" && !vid.ratio) await fetchTitle(vid);
     return vid;
   }
 
@@ -422,11 +478,70 @@
       ui = null;
     }
 
+    function ensureInner() {
+      var i, inner = null;
+      for (i = 0; i < stageEl.children.length; i++) {
+        if (stageEl.children[i].classList.contains("stage-inner")) inner = stageEl.children[i];
+      }
+      if (!inner) {
+        inner = el("div", "stage-inner");
+        stageEl.appendChild(inner);
+      }
+      return inner;
+    }
+
+    function applyAspect(vid) {
+      var ar = displayRatio(vid);
+      stageEl.style.setProperty("--ar", String(ar));
+      applyMediaCover(vid);
+    }
+
+    function applyMediaCover(vid) {
+      var inner = stageEl.querySelector(".stage-inner") || stageEl;
+      var iframe = inner.querySelector("iframe");
+      var video = inner.querySelector("video");
+      if (video && !iframe) {
+        video.style.objectFit = (vid && Math.abs(mediaRatio(vid) - displayRatio(vid)) > 0.04) ? "cover" : "contain";
+        video.style.inset = "0";
+        video.style.width = "100%";
+        video.style.height = "100%";
+        return;
+      }
+      if (!iframe) return;
+      iframe.style.inset = "unset";
+      iframe.style.right = "auto";
+      iframe.style.bottom = "auto";
+      iframe.style.transform = "";
+      if (!vid || Math.abs(mediaRatio(vid) - displayRatio(vid)) <= 0.04) {
+        iframe.style.top = "0";
+        iframe.style.left = "0";
+        iframe.style.width = "100%";
+        iframe.style.height = "100%";
+        return;
+      }
+      var d = displayRatio(vid), src = mediaRatio(vid);
+      if (src > d) {
+        var w = (src / d) * 100;
+        iframe.style.width = w + "%";
+        iframe.style.height = "100%";
+        iframe.style.left = ((100 - w) / 2) + "%";
+        iframe.style.top = "0";
+      } else {
+        var h = (d / src) * 100;
+        iframe.style.height = h + "%";
+        iframe.style.width = "100%";
+        iframe.style.top = ((100 - h) / 2) + "%";
+        iframe.style.left = "0";
+      }
+    }
+
     function resetStage(kind) {
       destroyYouTube();
       clearEl(stageEl);
       stageEl.classList.remove("has-yt");
+      var inner = ensureInner();
       if (kind === "empty") {
+        applyAspect(null);
         var ph = document.createElement("div");
         ph.className = "placeholder";
         var mark = document.createElement("span");
@@ -437,7 +552,7 @@
         text(p, opts.emptyText || "Kurtyna jest jeszcze zasunięta.");
         ph.appendChild(mark);
         ph.appendChild(p);
-        stageEl.appendChild(ph);
+        inner.appendChild(ph);
         if (captionEl) text(captionEl, "");
         currentIndex = -1;
         return;
@@ -490,12 +605,13 @@
       bar.appendChild(vol);
       bar.appendChild(btnFs);
 
-      stageEl.appendChild(layer);
-      stageEl.appendChild(shield);
-      stageEl.appendChild(topmask);
-      stageEl.appendChild(bottommask);
-      stageEl.appendChild(cover);
-      stageEl.appendChild(bar);
+      var inner = ensureInner();
+      inner.appendChild(layer);
+      inner.appendChild(shield);
+      inner.appendChild(topmask);
+      inner.appendChild(bottommask);
+      inner.appendChild(cover);
+      inner.appendChild(bar);
 
       ui = {
         layer: layer, shield: shield, cover: cover, coverImg: coverImg,
@@ -637,10 +753,17 @@
       var vid = currentList[index];
       if (captionEl) text(captionEl, fallbackTitle(vid, index));
       if (opts.onChange) opts.onChange(index);
+      applyAspect(vid);
 
-      if (vid.type === "yt") return playYouTube(vid, !!autoplay);
-      if (vid.type === "drive") return playDrive(vid);
-      return playFile(vid, !!autoplay);
+      var started;
+      if (vid.type === "yt") started = playYouTube(vid, !!autoplay);
+      else if (vid.type === "drive") started = playDrive(vid);
+      else started = playFile(vid, !!autoplay);
+      return Promise.resolve(started).then(function () {
+        return ensureRatio(vid).then(function () {
+          applyAspect(vid);
+        });
+      });
     }
 
     function playYouTube(vid, autoplay) {
@@ -712,6 +835,7 @@
                 ytPlayer.setVolume(lastVolume);
                 if (ui) ui.vol.value = String(lastVolume);
               } catch (e) {}
+              applyAspect(currentVid());
               syncSeek();
               setMuteIcon();
               if (autoplay || pendingPlay) {
@@ -744,30 +868,38 @@
 
     function playDrive(vid) {
       resetStage();
+      applyAspect(vid);
       var ifr = document.createElement("iframe");
       ifr.src = "https://drive.google.com/file/d/" + encodeURIComponent(vid.id) + "/preview";
       ifr.allow = "autoplay; fullscreen";
       ifr.setAttribute("allowfullscreen", "true");
       ifr.title = fallbackTitle(vid, currentIndex);
-      stageEl.appendChild(ifr);
+      ensureInner().appendChild(ifr);
       return Promise.resolve();
     }
 
     function playFile(vid, autoplay) {
       resetStage();
+      applyAspect(vid);
       var v = document.createElement("video");
       v.controls = true;
       v.playsInline = true;
       v.setAttribute("playsinline", "");
       v.preload = "metadata";
       v.src = vid.url;
+      v.addEventListener("loadedmetadata", function () {
+        if (v.videoWidth > 0 && v.videoHeight > 0) {
+          vid.ratio = v.videoWidth / v.videoHeight;
+          applyAspect(vid);
+        }
+      });
       v.addEventListener("ended", function () {
         if (shouldAutoNext() && currentList.length) {
           var next = (currentIndex + 1) % currentList.length;
           play(currentList, next, true);
         }
       });
-      stageEl.appendChild(v);
+      ensureInner().appendChild(v);
       if (autoplay) {
         var p = v.play();
         if (p && typeof p.catch === "function") p.catch(function () {});
@@ -845,7 +977,8 @@
       requestFullScreen: requestFullScreen,
       togglePlay: togglePlay,
       getIndex: getIndex,
-      showEmpty: showEmpty
+      showEmpty: showEmpty,
+      applyAspect: function (vid) { applyAspect(vid || currentVid()); }
     };
   }
 
@@ -903,6 +1036,26 @@
         tools.appendChild(toolBtn("Wyżej", function () { if (o.onMove) o.onMove(index, -1); }));
         tools.appendChild(toolBtn("Niżej", function () { if (o.onMove) o.onMove(index, 1); }));
         tools.appendChild(toolBtn("Usuń", function () { if (o.onRemove) o.onRemove(index); }));
+        var ratioBox = document.createElement("label");
+        ratioBox.className = "ratio-fld";
+        var ratioLbl = document.createElement("span");
+        ratioLbl.textContent = "Proporcje";
+        var sel = document.createElement("select");
+        sel.setAttribute("aria-label", "Proporcje obrazu");
+        [["", "Auto"], ["16:9", "16:9"], ["4:3", "4:3"], ["9:16", "9:16"], ["1:1", "1:1"]].forEach(function (opt) {
+          var option = document.createElement("option");
+          option.value = opt[0];
+          option.textContent = opt[1];
+          sel.appendChild(option);
+        });
+        sel.value = vid.ratioOverride || "";
+        sel.addEventListener("change", function () {
+          vid.ratioOverride = sel.value || "";
+          if (o.onRatio) o.onRatio(index, vid.ratioOverride);
+        });
+        ratioBox.appendChild(ratioLbl);
+        ratioBox.appendChild(sel);
+        tools.appendChild(ratioBox);
         art.appendChild(tools);
       }
 
@@ -945,6 +1098,9 @@
     parseLink: parseLink,
     extractLinksFromText: extractLinksFromText,
     fetchTitle: fetchTitle,
+    ensureRatio: ensureRatio,
+    displayRatio: displayRatio,
+    RATIO_PRESETS: RATIO_PRESETS,
     createPlayer: createPlayer,
     renderPosters: renderPosters,
     fallbackTitle: fallbackTitle,

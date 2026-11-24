@@ -90,6 +90,10 @@
         else if (idx === j) idx = i;
         if (idx >= 0) player.play(set.videos, idx, false);
         refreshPosters();
+      },
+      onRatio: function (i, value) {
+        set.videos[i].ratioOverride = value || "";
+        if (player && player.getIndex() === i) player.applyAspect(set.videos[i]);
       }
     });
     $("empty-msg").hidden = set.videos.length > 0;
