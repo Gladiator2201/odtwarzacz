@@ -57,7 +57,7 @@
       name: src.name || "",
       dedication: src.dedication || "",
       autoNext: !!src.autoNext,
-      videos: (src.videos || []).map(serializeVideo).filter(Boolean)
+      videos: videoList(src).map(serializeVideo).filter(Boolean)
     };
   }
 
@@ -191,43 +191,68 @@
     el.className = "status" + (isErr ? " err" : "");
   }
 
-  async function addLinks() {
-    currentFromForm();
-    var text = $("links").value;
-    var optionalTitle = $("title-input").value.trim();
-    var found = O.extractLinksFromText(text);
-    if (!found.length) {
-      status("Nie rozpoznałem żadnego łącza. Wklej adres YouTube, pliku albo Google Drive.", true);
-      return;
+  function videoList(src) {
+    var list = src && src.videos;
+    if (Array.isArray(list)) return list;
+    if (list && typeof list === "object" && typeof list.length === "number") {
+      return Array.prototype.slice.call(list);
     }
+    return [];
+  }
+
+  /* Wciąga łącza z pola tekstowego do zestawu — też przy zapisie i eksporcie,
+     gdy ktoś wklei adresy i kliknie Eksportuj / Zapisz bez „Dodaj do zestawu”. */
+  async function incorporatePendingLinks() {
+    currentFromForm();
+    if (!Array.isArray(set.videos)) set.videos = videoList(set);
+    var text = $("links") ? $("links").value : "";
+    var optionalTitle = $("title-input") ? $("title-input").value.trim() : "";
+    var found = O.extractLinksFromText(text);
+    if (!found.length) return { added: 0, skipped: 0, found: 0 };
     var added = 0, skipped = 0;
     for (var i = 0; i < found.length; i++) {
       var vid = found[i];
       var dup = set.videos.some(function (v) { return O.sameVideo(v, vid); });
       if (dup) { skipped++; continue; }
       if (optionalTitle && found.length === 1) vid.title = optionalTitle;
-      if (vid.type === "yt") await O.fetchTitle(vid);
+      if (vid.type === "yt") {
+        try { await O.fetchTitle(vid); } catch (e) { /* tytuł opcjonalny */ }
+      }
       if (!vid.title && optionalTitle && found.length === 1) vid.title = optionalTitle;
       set.videos.push(vid);
       added++;
     }
-    $("links").value = "";
-    $("title-input").value = "";
+    if (added || skipped) {
+      $("links").value = "";
+      $("title-input").value = "";
+    }
+    if (added) {
+      refreshPosters();
+      if (player && player.getIndex() < 0) player.play(set.videos, 0, false);
+      persistWorking();
+    }
+    return { added: added, skipped: skipped, found: found.length };
+  }
+
+  async function addLinks() {
+    var result = await incorporatePendingLinks();
+    if (!result.found) {
+      status("Nie rozpoznałem żadnego łącza. Wklej adres YouTube, pliku albo Google Drive.", true);
+      return;
+    }
     var parts = [];
-    if (added) parts.push("Dodano " + added + (added === 1 ? " film." : " filmy."));
-    if (skipped) parts.push("Pominięto " + skipped + " (już były w zestawie).");
+    if (result.added) parts.push("Dodano " + result.added + (result.added === 1 ? " film." : " filmy."));
+    if (result.skipped) parts.push("Pominięto " + result.skipped + " (już były w zestawie).");
     status(parts.join(" ") || "Nic nie dodano.");
-    refreshPosters();
-    if (added && player.getIndex() < 0) player.play(set.videos, 0, false);
-    persistWorking();
   }
 
   function sameName(a, b) {
     return String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
   }
 
-  function saveSet() {
+  async function saveSet() {
     currentFromForm();
+    await incorporatePendingLinks();
     if (!set.videos.length && !set.dedication && !set.name) {
       status("Nie ma czego zapisać — dodaj choć film albo nazwę.", true);
       return;
@@ -309,27 +334,42 @@
     return n || "zestaw";
   }
 
-  function exportSet() {
+  function downloadJson(filename, text) {
+    var blob = new Blob([text], { type: "application/json;charset=utf-8" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.setAttribute("download", filename);
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+  }
+
+  async function exportSet() {
     currentFromForm();
+    await incorporatePendingLinks();
+    var videos = serializeSet(set).videos;
     var payload = {
       v: 1,
       name: set.name || "",
       dedication: set.dedication || "",
       autoNext: !!set.autoNext,
-      videos: serializeSet(set).videos
+      videos: videos,
+      links: videos.map(function (v) { return v.url; }).filter(Boolean)
     };
-    if (!payload.videos.length && !payload.name && !payload.dedication) {
-      status("Nie ma czego eksportować.", true);
+    if (!payload.videos.length) {
+      status("Nie ma filmów do eksportu. Wklej łącza i kliknij „Dodaj do zestawu” (albo Eksportuj, gdy łącza są jeszcze w polu).", true);
       return;
     }
-    var blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-    var a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "zestaw-" + fileSafeName(payload.name || payload.dedication) + ".json";
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-    status("Zapisano plik zapasowy z " + payload.videos.length + " filmami.");
+    var text;
+    try {
+      text = JSON.stringify(payload, null, 2);
+    } catch (e) {
+      status("Nie udało się zapisać pliku JSON.", true);
+      return;
+    }
+    downloadJson("zestaw-" + fileSafeName(payload.name || payload.dedication) + ".json", text);
+    status("Zapisano plik zapasowy z " + payload.videos.length + " " + (payload.videos.length === 1 ? "filmem" : "filmami") + ".");
   }
 
   function importSetFromObject(data) {
@@ -340,16 +380,31 @@
     if (Array.isArray(data.sets) && !data.videos && !data.i) {
       throw new Error("bundle");
     }
-    var videos = data.videos || src.videos;
-    if (!videos && data.i && window.Odtwarzacz && O.expand) {
-      /* compact payload not expanded here */
+    var videos = videoList(data).length ? videoList(data) : videoList(src);
+    if (!videos.length && Array.isArray(data.links)) {
+      videos = data.links.map(function (u) { return O.parseLink(String(u)); }).filter(Boolean);
+    }
+    if (!videos.length && Array.isArray(data.i)) {
+      videos = data.i.map(function (item) {
+        if (!item || typeof item !== "object") return null;
+        var vid = null;
+        if (item.y) vid = O.parseLink("https://www.youtube.com/watch?v=" + item.y);
+        else if (item.g) vid = O.parseLink("https://drive.google.com/file/d/" + item.g + "/view");
+        else if (item.u) vid = O.parseLink(String(item.u));
+        if (!vid) return null;
+        if (item.t) vid.title = item.t;
+        if (typeof item.p === "number") vid.ratio = item.p;
+        if (item.o) vid.ratioOverride = item.o;
+        if (item.s) vid.short = true;
+        return vid;
+      }).filter(Boolean);
     }
     applySerialized({
       id: "",
-      name: src.name || src.n || "",
-      dedication: src.dedication || src.d || "",
-      autoNext: !!(src.autoNext || src.a),
-      videos: videos || []
+      name: src.name || src.n || data.n || "",
+      dedication: src.dedication || src.d || data.d || "",
+      autoNext: !!(src.autoNext || src.a || data.a),
+      videos: videos
     });
     if (!set.videos.length && !set.name && !set.dedication) throw new Error("empty");
     showLoadedSet();
@@ -401,6 +456,7 @@
 
   async function share() {
     currentFromForm();
+    await incorporatePendingLinks();
     if (!set.videos.length) {
       status("Najpierw dodaj przynajmniej jeden film.", true);
       return;
@@ -420,6 +476,7 @@
 
   async function shareFacebook() {
     currentFromForm();
+    await incorporatePendingLinks();
     if (!set.videos.length) {
       status("Najpierw dodaj przynajmniej jeden film.", true);
       return;
