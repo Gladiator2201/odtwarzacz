@@ -14,17 +14,89 @@
   function loadStore() {
     try {
       var raw = localStorage.getItem(STORE);
-      if (!raw) return { sets: [], currentId: "" };
+      if (!raw) return { sets: [], currentId: "", working: null };
       var data = JSON.parse(raw);
-      if (!data || !Array.isArray(data.sets)) return { sets: [], currentId: "" };
+      if (!data || typeof data !== "object") return { sets: [], currentId: "", working: null };
+      if (!Array.isArray(data.sets)) data.sets = [];
+      if (!data.currentId) data.currentId = "";
       return data;
     } catch (e) {
-      return { sets: [], currentId: "" };
+      return { sets: [], currentId: "", working: null };
     }
   }
 
   function saveStore(data) {
     localStorage.setItem(STORE, JSON.stringify(data));
+  }
+
+  function serializeVideo(v) {
+    if (!v || typeof v !== "object") return null;
+    var type = v.type || "";
+    var id = v.id || v.y || "";
+    var url = v.url || v.u || "";
+    if (!type && v.y) type = "yt";
+    if (!type && v.g) { type = "drive"; id = v.g; }
+    if (!type && url) type = "file";
+    if (type === "yt" && id && !url) url = "https://www.youtube.com/watch?v=" + id;
+    if (type === "drive" && id && !url) url = "https://drive.google.com/file/d/" + id + "/view";
+    if (!type || (type === "yt" && !id) || (type === "drive" && !id) || (type === "file" && !url)) return null;
+    var out = { type: type, title: v.title || v.t || "", url: url, thumb: v.thumb || "" };
+    if (id) out.id = id;
+    if (typeof v.ratio === "number" && isFinite(v.ratio)) out.ratio = v.ratio;
+    else if (typeof v.p === "number" && isFinite(v.p)) out.ratio = v.p;
+    if (v.ratioOverride) out.ratioOverride = v.ratioOverride;
+    else if (v.o) out.ratioOverride = v.o;
+    if (v.short || v.s) out.short = true;
+    return out;
+  }
+
+  function serializeSet(src) {
+    src = src || set;
+    return {
+      id: src.id || "",
+      name: src.name || "",
+      dedication: src.dedication || "",
+      autoNext: !!src.autoNext,
+      videos: (src.videos || []).map(serializeVideo).filter(Boolean)
+    };
+  }
+
+  function applySerialized(src) {
+    var snap = serializeSet(src);
+    set = {
+      id: snap.id,
+      name: snap.name,
+      dedication: snap.dedication,
+      autoNext: snap.autoNext,
+      videos: snap.videos.slice()
+    };
+    return set;
+  }
+
+  function persistWorking() {
+    try {
+      var store = loadStore();
+      var snap = serializeSet(set);
+      store.working = snap;
+      if (set.id) {
+        var idx = store.sets.findIndex(function (s) { return s.id === set.id; });
+        if (idx >= 0) store.sets[idx] = snap;
+      }
+      saveStore(store);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  var persistTimer = null;
+  function schedulePersist() {
+    if (persistTimer) clearTimeout(persistTimer);
+    persistTimer = setTimeout(function () {
+      persistTimer = null;
+      currentFromForm();
+      persistWorking();
+    }, 400);
   }
 
   function currentFromForm() {
@@ -78,6 +150,7 @@
         }
         refreshPosters();
         onChange();
+        persistWorking();
       },
       onMove: function (i, dir) {
         var j = i + dir;
@@ -90,10 +163,12 @@
         else if (idx === j) idx = i;
         if (idx >= 0) player.play(set.videos, idx, false);
         refreshPosters();
+        persistWorking();
       },
       onRatio: function (i, value) {
         set.videos[i].ratioOverride = value || "";
         if (player && player.getIndex() === i) player.applyAspect(set.videos[i]);
+        persistWorking();
       }
     });
     $("empty-msg").hidden = set.videos.length > 0;
@@ -144,6 +219,11 @@
     status(parts.join(" ") || "Nic nie dodano.");
     refreshPosters();
     if (added && player.getIndex() < 0) player.play(set.videos, 0, false);
+    persistWorking();
+  }
+
+  function sameName(a, b) {
+    return String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
   }
 
   function saveSet() {
@@ -152,22 +232,32 @@
       status("Nie ma czego zapisać — dodaj choć film albo nazwę.", true);
       return;
     }
-    if (!set.id) set.id = uid();
+    if (!set.videos.length) {
+      if (!window.confirm("Zestaw „" + (set.name || "bez nazwy") + "” nie ma jeszcze filmów. Zapisać pusty?")) return;
+    }
     var store = loadStore();
+    var other = store.sets.filter(function (s) {
+      return s.id !== set.id && sameName(s.name, set.name);
+    })[0];
+    if (other) {
+      if (!window.confirm("Zestaw o nazwie „" + set.name + "” już jest. Zastąpić go tym (wraz z filmami)?")) return;
+      set.id = other.id;
+    }
+    if (!set.id) set.id = uid();
+    var snap = serializeSet(set);
     var idx = store.sets.findIndex(function (s) { return s.id === set.id; });
-    var snap = {
-      id: set.id,
-      name: set.name,
-      dedication: set.dedication,
-      autoNext: set.autoNext,
-      videos: set.videos
-    };
     if (idx >= 0) store.sets[idx] = snap;
     else store.sets.push(snap);
     store.currentId = set.id;
-    saveStore(store);
+    store.working = snap;
+    try {
+      saveStore(store);
+    } catch (e) {
+      status("Nie udało się zapisać w przeglądarce (brak miejsca albo tryb prywatny). Proszę wyeksportować zestaw do pliku.", true);
+      return;
+    }
     refreshList();
-    status("Zestaw zapisany w tej przeglądarce: " + set.name);
+    status("Zestaw zapisany w tej przeglądarce: " + set.name + " (" + snap.videos.length + " " + (snap.videos.length === 1 ? "film" : "filmów") + ").");
   }
 
   function newSet() {
@@ -176,40 +266,111 @@
     player.showEmpty("Dodaj łącza, a film pojawi się tutaj.");
     refreshPosters();
     $("set-list").value = "";
+    persistWorking();
     status("Nowy, pusty zestaw.");
   }
 
   function deleteSet() {
     currentFromForm();
-    if (!set.id) { status("Ten zestaw nie był jeszcze zapisany.", true); return; }
+    if (!set.id) { status("Ten zestaw nie był jeszcze zapisany pod nazwą.", true); return; }
     if (!window.confirm("Usunąć zapis „" + (set.name || "bez nazwy") + "” z tej przeglądarki?")) return;
     var store = loadStore();
     store.sets = store.sets.filter(function (s) { return s.id !== set.id; });
     if (store.currentId === set.id) store.currentId = "";
-    saveStore(store);
+    set.id = "";
+    store.working = serializeSet(set);
+    try { saveStore(store); } catch (e) {}
     newSet();
     refreshList();
     status("Zapis usunięty.");
+  }
+
+  function showLoadedSet() {
+    applyToForm();
+    if (set.videos.length) player.play(set.videos, 0, false);
+    else player.showEmpty("Dodaj łącza, a film pojawi się tutaj.");
+    refreshPosters();
   }
 
   function loadSet(id) {
     var store = loadStore();
     var found = store.sets.filter(function (s) { return s.id === id; })[0];
     if (!found) return;
-    set = {
-      id: found.id,
-      name: found.name || "",
-      dedication: found.dedication || "",
-      autoNext: !!found.autoNext,
-      videos: (found.videos || []).slice()
-    };
+    applySerialized(found);
     store.currentId = set.id;
-    saveStore(store);
-    applyToForm();
-    if (set.videos.length) player.play(set.videos, 0, false);
-    else player.showEmpty("Dodaj łącza, a film pojawi się tutaj.");
-    refreshPosters();
-    status("Wczytano: " + (set.name || "zestaw"));
+    store.working = serializeSet(set);
+    try { saveStore(store); } catch (e) {}
+    showLoadedSet();
+    status("Wczytano: " + (set.name || "zestaw") + " (" + set.videos.length + " " + (set.videos.length === 1 ? "film" : "filmów") + ").");
+  }
+
+  function fileSafeName(name) {
+    var n = String(name || "zestaw").trim().replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim();
+    return n || "zestaw";
+  }
+
+  function exportSet() {
+    currentFromForm();
+    var payload = {
+      v: 1,
+      name: set.name || "",
+      dedication: set.dedication || "",
+      autoNext: !!set.autoNext,
+      videos: serializeSet(set).videos
+    };
+    if (!payload.videos.length && !payload.name && !payload.dedication) {
+      status("Nie ma czego eksportować.", true);
+      return;
+    }
+    var blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "zestaw-" + fileSafeName(payload.name || payload.dedication) + ".json";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    status("Zapisano plik zapasowy z " + payload.videos.length + " filmami.");
+  }
+
+  function importSetFromObject(data) {
+    if (!data || typeof data !== "object") throw new Error("bad");
+    // full editor export, or a stored snapshot, or a compact share-like object
+    var src = data;
+    if (data.working && (data.working.videos || data.working.name)) src = data.working;
+    if (Array.isArray(data.sets) && !data.videos && !data.i) {
+      throw new Error("bundle");
+    }
+    var videos = data.videos || src.videos;
+    if (!videos && data.i && window.Odtwarzacz && O.expand) {
+      /* compact payload not expanded here */
+    }
+    applySerialized({
+      id: "",
+      name: src.name || src.n || "",
+      dedication: src.dedication || src.d || "",
+      autoNext: !!(src.autoNext || src.a),
+      videos: videos || []
+    });
+    if (!set.videos.length && !set.name && !set.dedication) throw new Error("empty");
+    showLoadedSet();
+    persistWorking();
+    $("set-list").value = "";
+    status("Wczytano z pliku: " + (set.name || "zestaw") + " (" + set.videos.length + " " + (set.videos.length === 1 ? "film" : "filmów") + "). Możesz go teraz zapisać w przeglądarce.");
+  }
+
+  function importSetFile(file) {
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var data = JSON.parse(String(reader.result || ""));
+        importSetFromObject(data);
+      } catch (e) {
+        status("Ten plik nie wygląda na zapis zestawu.", true);
+      }
+    };
+    reader.onerror = function () { status("Nie udało się odczytać pliku.", true); };
+    reader.readAsText(file);
   }
 
   function makeQr(url) {
@@ -297,11 +458,21 @@
 
     $("dedication-input").addEventListener("input", function () {
       $("dedication").textContent = $("dedication-input").value.trim();
+      schedulePersist();
     });
+    $("set-name").addEventListener("input", schedulePersist);
+    $("chk-autonext").addEventListener("change", schedulePersist);
     $("btn-add").addEventListener("click", addLinks);
     $("btn-save").addEventListener("click", saveSet);
     $("btn-new").addEventListener("click", newSet);
     $("btn-delete").addEventListener("click", deleteSet);
+    $("btn-export").addEventListener("click", exportSet);
+    $("btn-import").addEventListener("click", function () { $("import-file").click(); });
+    $("import-file").addEventListener("change", function () {
+      var f = this.files && this.files[0];
+      this.value = "";
+      if (f) importSetFile(f);
+    });
     $("set-list").addEventListener("change", function () {
       if (this.value) loadSet(this.value);
     });
@@ -319,8 +490,17 @@
 
     refreshList();
     var store = loadStore();
-    if (store.currentId) loadSet(store.currentId);
-    else {
+    var restored = false;
+    if (store.working && ((store.working.videos && store.working.videos.length) || store.working.name || store.working.dedication)) {
+      applySerialized(store.working);
+      showLoadedSet();
+      if (set.id) $("set-list").value = set.id;
+      restored = true;
+    } else if (store.currentId) {
+      loadSet(store.currentId);
+      restored = true;
+    }
+    if (!restored) {
       applyToForm();
       player.showEmpty("Dodaj łącza, a film pojawi się tutaj.");
       refreshPosters();
@@ -330,10 +510,10 @@
     if (location.hash && location.hash.length > 2) {
       O.decodeHash(location.hash).then(function (decoded) {
         if (!decoded || !decoded.videos.length) return;
-        set = { id: "", name: decoded.name || "", dedication: decoded.dedication || "", autoNext: !!decoded.autoNext, videos: decoded.videos };
-        applyToForm();
-        player.play(set.videos, 0, false);
-        refreshPosters();
+        applySerialized({ id: "", name: decoded.name || "", dedication: decoded.dedication || "", autoNext: !!decoded.autoNext, videos: decoded.videos });
+        showLoadedSet();
+        persistWorking();
+        $("set-list").value = "";
         status("Wczytano zestaw z łącza — możesz go poprawić i znów udostępnić.");
       });
     }
